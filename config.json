@@ -1,0 +1,13 @@
+{
+  "name": "oracel-1",
+  "variables": [
+    {
+      "name": "rice-price",
+      "type": "float"
+    },
+    {
+      "name": "temperature",
+      "type": "float"
+    }
+  ]
+}
