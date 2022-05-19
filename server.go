@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -22,19 +24,39 @@ var (
 type Model struct {
 	Temperature float32
 	RicePrice   float32
+	Hamda       float32
 }
 
-// type Variable struct {
-// 	Name string `json:"name"`
-// 	Type string `json:"type"`
-// }
+type Variable struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
 
 // type Config struct {
 // 	Name      string     `json:"name"`
 // 	Variables []Variable `json:"variables"`
 // }
 
+// func read_config() (*Config, error) {
+// 	file, err := ioutil.ReadFile(*CONFIG_PATH)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	var config Config
+// 	err = json.Unmarshal(file, &config)
+
+// 	return &config, err
+// }
+type Update struct {
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	Timestamp string `json:"timestamp"`
+}
+
 type Queue struct {
+	Modle []Variable
 	Topic map[string][]*websocket.Conn
 	Mux   sync.Mutex
 }
@@ -47,8 +69,9 @@ func (q *Queue) Init() {
 	q.Topic = make(map[string][]*websocket.Conn)
 	mType := reflect.TypeOf(Model{})
 	for i := 0; i < mType.NumField(); i++ {
-		log.Print(mType.Field(i).Name)
-		q.Topic[mType.Field(i).Name] = []*websocket.Conn{}
+		field := mType.Field(i)
+		q.Modle = append(q.Modle, Variable{Name: field.Name, Type: field.Type.String()})
+		q.Topic[field.Name] = []*websocket.Conn{}
 	}
 
 	init_server(q)
@@ -81,29 +104,93 @@ func (q *Queue) HandleSub(w http.ResponseWriter, r *http.Request) {
 	// assume that the other end will close the connections :)
 }
 
-func (q *Queue) UpdateTemperature(value float64) {
-	// conns := q.Topic["Temperature"]
-	// for _, conn := range conns {
-	// TODO send json response
-	// conn
-	// }
+func (q *Queue) Update(v Variable) {
+	conns, ok := q.Topic[v.Name]
+	if !ok {
+		return
+	}
+
+	for _, conn := range conns {
+		go func(conn *websocket.Conn) {
+			res := Update{
+				Key:       v.Name,
+				Value:     v.Value,
+				Timestamp: time.Now().String(),
+			}
+
+			err := conn.WriteJSON(&res)
+			if err != nil {
+				log.Print("update faild :(")
+			}
+		}(conn)
+	}
 }
 
-// func read_config() (*Config, error) {
-// 	file, err := ioutil.ReadFile(*CONFIG_PATH)
-// 	if err != nil {
-// 		return nil, err
+// MOCK functions
+
+// func (q *Queue) UpdateTemperature(value float64) {
+// 	conns := q.Topic["Temperature"]
+// 	for _, conn := range conns {
+// 		go func(conn *websocket.Conn) {
+// 			res := Update{
+// 				Key:       "Temperature",
+// 				Value:     fmt.Sprint(value),
+// 				Timestamp: time.Now().String(),
+// 			}
+
+// 			err := conn.WriteJSON(&res)
+// 			if err != nil {
+// 				log.Print("update faild :(")
+// 			}
+// 		}(conn)
 // 	}
+// }
 
-// 	var config Config
-// 	err = json.Unmarshal(file, &config)
+// func (q *Queue) UpdateRicePrice(value float64) {
+// 	conns := q.Topic["RicePrice"]
+// 	for _, conn := range conns {
+// 		go func(conn *websocket.Conn) {
+// 			res := Update{
+// 				Key:       "RicePrice",
+// 				Value:     fmt.Sprint(value),
+// 				Timestamp: time.Now().String(),
+// 			}
 
-// 	return &config, err
+// 			err := conn.WriteJSON(&res)
+// 			if err != nil {
+// 				log.Print("update faild :(")
+// 			}
+// 		}(conn)
+// 	}
 // }
 
 func init_server(q *Queue) {
 	http.HandleFunc("/ui", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./ui.html")
+	})
+
+	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		var v Variable
+		err := json.NewDecoder(r.Body).Decode(&v)
+		if err != nil {
+			return
+		}
+
+		log.Printf("%+v", v)
+		q.Update(v)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(struct{ Msg string }{"done"})
+	})
+
+	http.HandleFunc("/models", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		err := json.NewEncoder(w).Encode(q.Modle)
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	http.HandleFunc("/sub", q.HandleSub)
@@ -113,11 +200,6 @@ func init_server(q *Queue) {
 
 func main() {
 	flag.Parse()
-
-	// config, err := read_config()
-	// if err != nil {
-	// 	panic(err)
-	// }
 
 	var queue Queue
 	queue.Init()

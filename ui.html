@@ -5,8 +5,94 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UI</title>
+    <style>
+      .body {
+        height: 100vh;
+        font-family: "hack";
+      }
+
+      #view {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        min-width: 400px;
+        padding: 7px;
+        border: 1px dashed black;
+        border-radius: 5px;
+      }
+
+      .var {
+        display: flex;
+        padding: 6px 0;
+      }
+
+      .var p {
+        min-width: 100px;
+        display: flex;
+        align-items: center;
+        margin: 0 6px;
+      }
+
+      .var-input {
+        padding: 6px;
+        border: 1px solid;
+      }
+
+      .btn-submit {
+        margin: 0 6px;
+      }
+
+      .btn-submit:hover {
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
-    <script></script>
+    <h1>Oracle Hack</h1>
+    <div id="view"></div>
+    <script>
+      let view = document.querySelector("#view");
+
+      (async () => {
+        try {
+          let modelsReq = await fetch("/models");
+          let models = await modelsReq.json();
+
+          render(models);
+        } catch (err) {
+          document.write("لا");
+        }
+      })();
+
+      function render(models) {
+        let fragment = new DocumentFragment();
+
+        for (let v of models) {
+          let div = document.createElement("div");
+          div.classList.add("var");
+          div.innerHTML = `
+            <p>${v.name}</p>
+            <input class="var-input" id="${v.name}"></input>
+            <button class="btn-submit" onclick="update('${v.name}')">Update</button>
+          `;
+          fragment.appendChild(div);
+        }
+
+        view.appendChild(fragment);
+      }
+
+      async function update(name) {
+        let el = document.querySelector(`#${name}`);
+
+        fetch("/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name, value: el.value }),
+        });
+      }
+    </script>
   </body>
 </html>

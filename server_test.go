@@ -22,6 +22,25 @@ func Test_sub(t *testing.T) {
 
 	log.Printf("%+v", queue.Topic)
 }
+func Test_generic(t *testing.T) {
+	tf := func(v interface{}) {
+		switch v.(type) {
+		case int:
+			log.Print("int")
+		case string:
+			log.Print("Stirng")
+		case float64:
+			log.Print("float64")
+		default:
+			log.Println("None")
+		}
+	}
+
+	tf(1)
+	tf(1.2)
+	tf("asd")
+
+}
 
 func getConn() *websocket.Conn {
 	u := url.URL{Scheme: "ws", Host: "127.0.0.1:8383", Path: "/sub"}
